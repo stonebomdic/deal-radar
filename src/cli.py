@@ -57,6 +57,9 @@ def main():
     # serve command
     subparsers.add_parser("serve", help="Start API server")
 
+    # seed command
+    subparsers.add_parser("seed", help="Seed initial bank data")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -72,6 +75,10 @@ def main():
             port=settings.api_port,
             reload=settings.debug,
         )
+    elif args.command == "seed":
+        from src.db.seed import seed_banks
+
+        seed_banks()
     else:
         parser.print_help()
 
