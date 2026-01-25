@@ -1,11 +1,18 @@
+import json
+import re
 from typing import List, Optional
 
 from bs4 import BeautifulSoup
 from loguru import logger
+from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 
 from src.crawlers.base import BaseCrawler
-from src.crawlers.utils import fetch_page
 from src.models import CreditCard, Promotion
+
+
+# CTBC 信用卡 JSON API
+CTBC_CARDS_API = "https://www.ctbcbank.com/web/content/twrbo/setting/creditcards.cardlist.json"
 
 
 class CtbcCrawler(BaseCrawler):
@@ -13,134 +20,293 @@ class CtbcCrawler(BaseCrawler):
     bank_code = "ctbc"
     base_url = "https://www.ctbcbank.com"
 
-    cards_url = "https://www.ctbcbank.com/content/dam/minisite/long/card/creditcard/cardlist/index.html"
-    promotions_url = "https://www.ctbcbank.com/content/ctbcbank/tw/zh-tw/personal/credit-card/privilege.html"
+    def __init__(self, db_session):
+        super().__init__(db_session)
+        self._browser = None
+        self._page = None
+        self._playwright = None
 
-    def fetch_cards(self) -> List[CreditCard]:
+    def _init_browser(self):
+        """初始化 Playwright 瀏覽器（帶 Stealth 模式）"""
+        if self._browser is None:
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                ]
+            )
+            context = self._browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                locale="zh-TW",
+            )
+            self._page = context.new_page()
+            stealth = Stealth()
+            stealth.apply_stealth_sync(self._page)
+        return self._page
+
+    def _close_browser(self):
+        """關閉瀏覽器"""
+        if self._browser:
+            self._browser.close()
+            self._browser = None
+            self._page = None
+        if self._playwright:
+            self._playwright.stop()
+            self._playwright = None
+
+    def run(self) -> dict:
+        """執行爬蟲（覆寫基類方法以管理瀏覽器生命週期）"""
+        logger.info(f"Starting crawler for {self.bank_name}")
+
+        try:
+            self._init_browser()
+
+            # 從 JSON API 擷取所有卡片
+            cards = self._fetch_cards_from_api()
+            logger.info(f"Fetched {len(cards)} cards from {self.bank_name}")
+
+            # 擷取優惠（從各卡片的詳情頁）
+            promotions = self._fetch_promotions_for_cards(cards[:10])  # 限制前 10 張以節省時間
+            logger.info(f"Fetched {len(promotions)} promotions from {self.bank_name}")
+
+            return {
+                "bank": self.bank_name,
+                "cards_count": len(cards),
+                "promotions_count": len(promotions),
+            }
+        finally:
+            self._close_browser()
+
+    def _fetch_cards_from_api(self) -> List[CreditCard]:
+        """從官方 JSON API 擷取所有信用卡資訊"""
+        import time
+
         cards = []
-        soup = fetch_page(self.cards_url)
+        page = self._page
 
-        if not soup:
-            logger.error(f"Failed to fetch cards from {self.bank_name}")
-            return cards
+        logger.info(f"Fetching cards from API: {CTBC_CARDS_API}")
+        page.goto(CTBC_CARDS_API, wait_until="networkidle", timeout=30000)
+        time.sleep(2)
 
-        # 解析信用卡列表
-        # 注意：實際選擇器需要根據網站結構調整
-        card_items = soup.select(".card-item, .product-card, [data-card]")
+        json_text = page.evaluate("() => document.body.innerText")
 
-        for item in card_items:
-            try:
-                card_data = self._parse_card_item(item)
+        try:
+            data = json.loads(json_text)
+            card_list = data.get("creditCards", [])
+            logger.info(f"Found {len(card_list)} cards in API response")
+
+            for card_json in card_list:
+                # 跳過已停止申辦的卡片
+                features = card_json.get("cardFeature", [])
+                if features and "停止申辦" in features[0]:
+                    logger.debug(f"Skipping discontinued card: {card_json.get('cardName')}")
+                    continue
+
+                card_data = self._parse_card_json(card_json)
                 if card_data:
                     card = self.save_card(card_data)
                     cards.append(card)
-            except Exception as e:
-                logger.warning(f"Error parsing card: {e}")
-                continue
+                    logger.info(f"Saved card: {card_data['name']}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON API response: {e}")
 
         return cards
 
-    def _parse_card_item(self, item: BeautifulSoup) -> Optional[dict]:
-        """解析單張卡片資訊"""
-        name_elem = item.select_one(".card-name, .title, h3, h4")
-        if not name_elem:
-            return None
-
-        name = name_elem.get_text(strip=True)
+    def _parse_card_json(self, card_json: dict) -> Optional[dict]:
+        """解析單張卡片的 JSON 資料"""
+        name = card_json.get("cardName", "")
         if not name:
             return None
 
-        image_elem = item.select_one("img")
-        image_url = image_elem.get("src") if image_elem else None
+        # 解析卡片等級
+        card_levels = card_json.get("cardLevel", [])
+        card_type = self._parse_card_level(card_levels)
 
-        link_elem = item.select_one("a")
-        apply_url = link_elem.get("href") if link_elem else None
+        # 解析特色
+        features = {
+            "card_types": card_json.get("cardType", []),
+            "reward_types": card_json.get("rewardType", []),
+            "extra_functions": card_json.get("extraFunction", []),
+            "highlights": card_json.get("cardFeature", []),
+        }
+
+        # 解析回饋率
+        reward_rate = self._extract_reward_rate_from_features(features.get("highlights", []))
+
+        # 解析年費
+        annual_fee_text = card_json.get("annualFee", "")
+        annual_fee = self._parse_annual_fee(annual_fee_text)
+        annual_fee_waiver = self._parse_annual_fee_waiver(annual_fee_text)
+
+        # 圖片 URL
+        images = card_json.get("cardImg", [])
+        image_url = f"{self.base_url}{images[0]}" if images else None
+
+        # 詳情頁 URL
+        intro_link = card_json.get("introLink", "")
+        apply_url = f"{self.base_url}{intro_link}" if intro_link else None
 
         return {
             "name": name,
+            "card_type": card_type,
+            "annual_fee": annual_fee,
+            "annual_fee_waiver": annual_fee_waiver,
+            "base_reward_rate": reward_rate,
             "image_url": image_url,
             "apply_url": apply_url,
-            "card_type": self._detect_card_type(name),
+            "features": features,
         }
 
-    def _detect_card_type(self, name: str) -> Optional[str]:
-        """根據卡名判斷卡片等級"""
-        type_keywords = {
-            "無限卡": "無限卡",
-            "極緻卡": "極緻卡",
-            "御璽卡": "御璽卡",
+    def _parse_card_level(self, levels: List[str]) -> str:
+        """從卡片等級列表解析主要等級"""
+        level_priority = {
+            "無限/世界/極致卡": "無限卡",
+            "御璽/鈦金/晶緻卡": "御璽卡",
             "白金卡": "白金卡",
-            "鈦金卡": "鈦金卡",
-            "晶緻卡": "晶緻卡",
+            "金卡": "金卡",
+            "普卡": "普卡",
         }
-        for keyword, card_type in type_keywords.items():
-            if keyword in name:
-                return card_type
+        for level_key, level_value in level_priority.items():
+            if any(level_key in l for l in levels):
+                return level_value
+        return "白金卡"
+
+    def _extract_reward_rate_from_features(self, features: List[str]) -> float:
+        """從特色列表中擷取回饋率"""
+        max_rate = 0.0
+        for feature in features:
+            # 尋找百分比
+            matches = re.findall(r"(\d+(?:\.\d+)?)\s*%", feature)
+            for match in matches:
+                try:
+                    rate = float(match)
+                    if rate > max_rate and rate <= 30:
+                        max_rate = rate
+                except ValueError:
+                    pass
+        return max_rate if max_rate > 0 else 1.0
+
+    def _parse_annual_fee(self, text: str) -> int:
+        """從年費文字中解析年費金額"""
+        if not text:
+            return 0
+
+        # 移除 HTML 標籤
+        clean_text = re.sub(r"<[^>]+>", " ", text)
+
+        # 尋找年費金額
+        patterns = [
+            r"NT\$?([\d,]+)\s*元",
+            r"年費[：:]\s*(?:正卡)?(?:新臺幣|NT\$?)?\s*([\d,]+)",
+            r"([\d,]+)\s*元",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, clean_text)
+            if match:
+                fee = match.group(1).replace(",", "")
+                try:
+                    return int(fee)
+                except ValueError:
+                    pass
+
+        if "免年費" in clean_text or "首年免" in clean_text:
+            return 0
+
+        return 0
+
+    def _parse_annual_fee_waiver(self, text: str) -> Optional[str]:
+        """從年費文字中解析減免條件"""
+        if not text:
+            return None
+
+        clean_text = re.sub(r"<[^>]+>", " ", text)
+
+        if "首年免年費" in clean_text or "首年免" in clean_text:
+            return "首年免年費"
+        if "免年費" in clean_text:
+            return "免年費"
+        if "消費滿" in clean_text and "免" in clean_text:
+            return "消費滿額免年費"
         return None
 
-    def fetch_promotions(self) -> List[Promotion]:
+    def _fetch_promotions_for_cards(self, cards: List[CreditCard]) -> List[Promotion]:
+        """為指定卡片擷取優惠活動"""
+        import time
+        from datetime import datetime
+
         promotions = []
-        soup = fetch_page(self.promotions_url)
+        page = self._page
 
-        if not soup:
-            logger.error(f"Failed to fetch promotions from {self.bank_name}")
-            return promotions
-
-        # 解析優惠列表
-        promo_items = soup.select(".promo-item, .privilege-item, .offer-card")
-
-        for item in promo_items:
-            try:
-                promo_data = self._parse_promotion_item(item)
-                if promo_data:
-                    # 需要關聯到特定卡片，這裡先取第一張卡
-                    card = (
-                        self.db.query(CreditCard)
-                        .filter_by(bank_id=self.bank.id)
-                        .first()
-                    )
-                    if card:
-                        promotion = self.save_promotion(card, promo_data)
-                        promotions.append(promotion)
-            except Exception as e:
-                logger.warning(f"Error parsing promotion: {e}")
+        for card in cards:
+            if not card.apply_url:
                 continue
+
+            try:
+                logger.debug(f"Fetching promotions for: {card.name}")
+                page.goto(card.apply_url, wait_until="networkidle", timeout=30000)
+                time.sleep(2)
+
+                html = page.content()
+                soup = BeautifulSoup(html, "lxml")
+                body_text = " ".join(soup.get_text().split())
+
+                # 擷取優惠
+                promo_patterns = [
+                    r"(\d+(?:\.\d+)?%\s*(?:回饋|現金回饋)[^，。]{0,30})",
+                    r"(最高\s*\d+(?:\.\d+)?%[^，。]{0,30})",
+                    r"(國[內外]消費[^，。]*\d+(?:\.\d+)?%[^，。]{0,20})",
+                ]
+
+                seen = set()
+                for pattern in promo_patterns:
+                    matches = re.findall(pattern, body_text)
+                    for match in matches:
+                        title = match.strip()[:60]
+                        if title and title not in seen and len(title) > 5:
+                            seen.add(title)
+                            promo_data = {
+                                "title": title,
+                                "description": match,
+                                "source_url": card.apply_url,
+                                "category": self._detect_category(match),
+                            }
+                            promo = self.save_promotion(card, promo_data)
+                            promotions.append(promo)
+                            logger.debug(f"Saved promotion: {title}")
+
+                            if len([p for p in promotions if p.card_id == card.id]) >= 3:
+                                break
+                    if len([p for p in promotions if p.card_id == card.id]) >= 3:
+                        break
+
+            except Exception as e:
+                logger.warning(f"Error fetching promotions for {card.name}: {e}")
 
         return promotions
 
-    def _parse_promotion_item(self, item: BeautifulSoup) -> Optional[dict]:
-        """解析單一優惠資訊"""
-        title_elem = item.select_one(".title, h3, h4, .promo-title")
-        if not title_elem:
-            return None
+    def fetch_cards(self) -> List[CreditCard]:
+        """擷取卡片（實作抽象方法）"""
+        return self._fetch_cards_from_api()
 
-        title = title_elem.get_text(strip=True)
-        if not title:
-            return None
+    def fetch_promotions(self) -> List[Promotion]:
+        """擷取優惠活動（實作抽象方法）"""
+        cards = self.db.query(CreditCard).filter_by(bank_id=self.bank.id).limit(10).all()
+        return self._fetch_promotions_for_cards(cards)
 
-        desc_elem = item.select_one(".desc, .description, p")
-        description = desc_elem.get_text(strip=True) if desc_elem else None
-
-        link_elem = item.select_one("a")
-        source_url = link_elem.get("href") if link_elem else None
-
-        return {
-            "title": title,
-            "description": description,
-            "source_url": source_url,
-            "category": self._detect_category(title, description),
-        }
-
-    def _detect_category(self, title: str, description: Optional[str]) -> Optional[str]:
-        """根據標題和描述判斷優惠類別"""
-        text = f"{title} {description or ''}"
+    def _detect_category(self, text: str) -> str:
+        """根據文字判斷優惠類別"""
         category_keywords = {
             "dining": ["餐飲", "美食", "餐廳", "吃"],
-            "online_shopping": ["網購", "線上", "電商", "蝦皮", "momo"],
+            "online_shopping": ["網購", "線上", "電商", "蝦皮", "momo", "Yahoo"],
             "transport": ["交通", "加油", "高鐵", "台鐵", "捷運"],
             "overseas": ["海外", "國外", "出國", "日本", "韓國"],
             "convenience_store": ["超商", "7-11", "全家", "萊爾富"],
-            "department_store": ["百貨", "週年慶", "SOGO", "新光"],
+            "department_store": ["百貨", "週年慶", "SOGO", "新光", "遠東"],
+            "travel": ["旅遊", "哩程", "飛行", "航空", "機場", "訂房"],
         }
         for category, keywords in category_keywords.items():
             if any(kw in text for kw in keywords):

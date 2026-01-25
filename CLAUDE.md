@@ -69,6 +69,17 @@ The base class provides:
 
 To add a new bank crawler, create a file in `src/crawlers/banks/` following the pattern in `ctbc.py`.
 
+### CTBC Crawler - Static Data Mode
+
+The CTBC website uses Akamai Bot Manager anti-bot protection, which makes dynamic crawling difficult. The `CtbcCrawler` uses a `use_static_data = True` flag to load pre-defined card and promotion data from constants in `ctbc.py`.
+
+To update CTBC card data:
+1. Edit `CTBC_CARDS_DATA` in `src/crawlers/banks/ctbc.py`
+2. Edit `CTBC_PROMOTIONS_DATA` for promotions
+3. Run `python -m src.cli crawl --bank ctbc` to refresh the database
+
+The static data includes 10 major CTBC credit cards with their features, reward rates, and annual fee information.
+
 ### Recommendation Engine
 
 The recommendation system (`src/recommender/`) uses a weighted scoring approach:

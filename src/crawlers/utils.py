@@ -5,6 +5,7 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
+from playwright.sync_api import sync_playwright
 
 from src.config import get_settings
 
@@ -56,3 +57,49 @@ def fetch_page(url: str, retries: Optional[int] = None) -> Optional[BeautifulSou
 
     logger.error(f"Failed to fetch {url} after {retries} attempts")
     return None
+
+
+def fetch_page_with_browser(
+    url: str, wait_selector: Optional[str] = None, timeout: int = 30000
+) -> Optional[BeautifulSoup]:
+    """使用 Playwright 瀏覽器獲取頁面內容，可處理 JavaScript 渲染的頁面"""
+    try:
+        random_delay()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            context = browser.new_context(
+                user_agent=random.choice(USER_AGENTS),
+                viewport={"width": 1920, "height": 1080},
+                locale="zh-TW",
+            )
+            page = context.new_page()
+
+            # 設定額外的 headers
+            page.set_extra_http_headers({
+                "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            })
+
+            page.goto(url, wait_until="networkidle", timeout=timeout)
+
+            # 等待特定元素出現
+            if wait_selector:
+                page.wait_for_selector(wait_selector, timeout=timeout)
+            else:
+                # 等待頁面完全載入
+                page.wait_for_load_state("networkidle")
+                time.sleep(2)  # 額外等待確保動態內容載入
+
+            html = page.content()
+            browser.close()
+
+            return BeautifulSoup(html, "lxml")
+    except Exception as e:
+        logger.error(f"Failed to fetch {url} with browser: {e}")
+        return None
