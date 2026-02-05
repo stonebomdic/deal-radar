@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 華南銀行信用卡介紹頁
 HNCB_CARDS_URL = "https://www.hncb.com.tw/personal/credit-card/card-intro"
 

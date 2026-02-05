@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 富邦銀行信用卡介紹頁
 FUBON_CARDS_URL = "https://www.fubon.com/banking/personal/credit_card/all_card/"
 

@@ -5,7 +5,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
-from src.crawlers.banks import CtbcCrawler, EsunCrawler, SinopacCrawler
+from src.crawlers.banks import (
+    CathayCrawler,
+    CtbcCrawler,
+    EsunCrawler,
+    FirstbankCrawler,
+    FubonCrawler,
+    HncbCrawler,
+    MegabankCrawler,
+    SinopacCrawler,
+    TaishinCrawler,
+    UbotCrawler,
+)
 from src.db.database import Base
 
 settings = get_settings()
@@ -24,9 +35,16 @@ def run_crawler(bank: str = None):
     engine = create_engine(sync_database_url)
 
     crawlers = {
+        "cathay": CathayCrawler,
         "ctbc": CtbcCrawler,
         "esun": EsunCrawler,
+        "firstbank": FirstbankCrawler,
+        "fubon": FubonCrawler,
+        "hncb": HncbCrawler,
+        "megabank": MegabankCrawler,
         "sinopac": SinopacCrawler,
+        "taishin": TaishinCrawler,
+        "ubot": UbotCrawler,
     }
 
     with Session(engine) as session:

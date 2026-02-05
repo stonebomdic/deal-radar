@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 國泰世華信用卡介紹頁
 CATHAY_CARDS_URL = "https://www.cathaybk.com.tw/cathaybk/personal/product/credit-card/cards/"
 

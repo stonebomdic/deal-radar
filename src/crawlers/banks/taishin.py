@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 台新銀行信用卡介紹頁
 TAISHIN_CARDS_URL = "https://www.taishinbank.com.tw/TSB/personal/credit/intro/"
 

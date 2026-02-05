@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 聯邦銀行信用卡介紹頁
 UBOT_CARDS_URL = "https://card.ubot.com.tw/eCard/introduction/introduction.aspx"
 

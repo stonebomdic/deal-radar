@@ -10,7 +10,6 @@ from playwright_stealth import Stealth
 from src.crawlers.base import BaseCrawler
 from src.models import CreditCard, Promotion
 
-
 # 兆豐銀行信用卡介紹頁
 MEGABANK_CARDS_URL = "https://www.megabank.com.tw/personal/credit-card/card-intro"
 
