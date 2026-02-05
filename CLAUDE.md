@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies (including dev tools)
 pip install -e ".[dev]"
 
+# Install Playwright browsers (required for crawlers)
+playwright install chromium
+
 # Run all tests
 pytest tests/ -v
 
@@ -44,6 +47,8 @@ python -m src.cli crawl --bank ctbc
 python -m src.cli serve
 ```
 
+Supported bank codes: `ctbc` (中國信託), `esun` (玉山銀行), `sinopac` (永豐銀行)
+
 ## Architecture Overview
 
 ### Dual Database Session Pattern
@@ -63,22 +68,17 @@ All bank crawlers inherit from `BaseCrawler` (`src/crawlers/base.py`) and must i
 
 The base class provides:
 - `bank` property - Auto-creates or fetches the Bank record
-- `save_card(card_data)` - Upsert logic for credit cards
-- `save_promotion(card, promo_data)` - Upsert logic for promotions
+- `save_card(card_data)` - Upsert logic for credit cards (deduplicates by bank_id + name)
+- `save_promotion(card, promo_data)` - Upsert logic for promotions (deduplicates by card_id + title)
 - `run()` - Orchestrates the crawl workflow
 
-To add a new bank crawler, create a file in `src/crawlers/banks/` following the pattern in `ctbc.py`.
+All current crawlers use **Playwright with `playwright-stealth`** for browser automation to bypass anti-bot protections. Each crawler manages its own browser lifecycle with `_init_browser()` / `_close_browser()` methods and overrides `run()` to wrap the base workflow with browser setup/teardown.
 
-### CTBC Crawler - Static Data Mode
-
-The CTBC website uses Akamai Bot Manager anti-bot protection, which makes dynamic crawling difficult. The `CtbcCrawler` uses a `use_static_data = True` flag to load pre-defined card and promotion data from constants in `ctbc.py`.
-
-To update CTBC card data:
-1. Edit `CTBC_CARDS_DATA` in `src/crawlers/banks/ctbc.py`
-2. Edit `CTBC_PROMOTIONS_DATA` for promotions
-3. Run `python -m src.cli crawl --bank ctbc` to refresh the database
-
-The static data includes 10 major CTBC credit cards with their features, reward rates, and annual fee information.
+To add a new bank crawler:
+1. Create a file in `src/crawlers/banks/` following the pattern in existing crawlers (e.g., `esun.py`)
+2. Set class attributes: `bank_name`, `bank_code`, `base_url`
+3. Implement `fetch_cards()` and `fetch_promotions()`
+4. Register the crawler in `src/crawlers/banks/__init__.py` and `src/cli.py`
 
 ### Recommendation Engine
 
