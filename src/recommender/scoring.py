@@ -6,9 +6,10 @@ from src.models import CreditCard, Promotion
 
 @dataclass
 class ScoringWeights:
-    reward: float = 0.5
-    feature: float = 0.3
-    promotion: float = 0.2
+    reward: float = 0.40
+    feature: float = 0.25
+    promotion: float = 0.15
+    annual_fee_roi: float = 0.20
 
 
 def calculate_reward_score(
@@ -160,11 +161,13 @@ def calculate_total_score(
     reward_score = calculate_reward_score(card, spending_habits, monthly_amount, promotions)
     feature_score = calculate_feature_score(card, preferences)
     promotion_score = calculate_promotion_score(promotions)
+    roi_score = calculate_annual_fee_roi(card, monthly_amount, spending_habits, promotions)
 
     total = (
         reward_score * weights.reward
         + feature_score * weights.feature
         + promotion_score * weights.promotion
+        + roi_score * weights.annual_fee_roi
     )
 
     return {
@@ -172,4 +175,5 @@ def calculate_total_score(
         "reward_score": reward_score,
         "feature_score": feature_score,
         "promotion_score": promotion_score,
+        "annual_fee_roi_score": roi_score,
     }

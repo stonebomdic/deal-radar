@@ -22,6 +22,7 @@ class CardRecommendation:
     reward_score: float
     feature_score: float
     promotion_score: float
+    annual_fee_roi_score: float
     estimated_monthly_reward: float
     reasons: List[str]
 
@@ -63,6 +64,7 @@ class RecommendationEngine:
                     reward_score=scores["reward_score"],
                     feature_score=scores["feature_score"],
                     promotion_score=scores["promotion_score"],
+                    annual_fee_roi_score=scores["annual_fee_roi_score"],
                     estimated_monthly_reward=estimated_reward,
                     reasons=reasons,
                 )

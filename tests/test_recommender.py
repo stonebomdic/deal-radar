@@ -6,10 +6,12 @@ from src.db.database import Base
 from src.models import Bank, CreditCard, Promotion
 from src.recommender.engine import RecommendationEngine, RecommendRequest
 from src.recommender.scoring import (
+    ScoringWeights,
     calculate_annual_fee_roi,
     calculate_feature_score,
     calculate_promotion_score,
     calculate_reward_score,
+    calculate_total_score,
 )
 
 
@@ -319,6 +321,57 @@ def test_promotion_score_caps_at_100():
     score = calculate_promotion_score(promos)
     # 5 * min(10, 10) * 5 = 250, capped at 100
     assert score == 100.0
+
+
+def test_total_score_includes_roi():
+    """Total score should include annual_fee_roi component."""
+    card = CreditCard(name="Test Card", annual_fee=0, base_reward_rate=2.0)
+    scores = calculate_total_score(
+        card=card,
+        spending_habits={"dining": 1.0},
+        monthly_amount=30000,
+        preferences=["no_annual_fee"],
+        promotions=[],
+    )
+    assert "annual_fee_roi_score" in scores
+    assert scores["annual_fee_roi_score"] == 80.0  # Free card
+
+
+def test_total_score_new_weights():
+    """Total score should use new default weights."""
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=2.0)
+    scores = calculate_total_score(
+        card=card,
+        spending_habits={"dining": 1.0},
+        monthly_amount=30000,
+        preferences=[],
+        promotions=[],
+    )
+    # reward_score: 30000 * 2% = 600, max = 30000 * 5% = 1500, score = 40.0
+    # feature_score: no prefs => 50.0
+    # promotion_score: no promos => 0.0
+    # roi_score: free card => 80.0
+    # total = 40*0.40 + 50*0.25 + 0*0.15 + 80*0.20 = 16 + 12.5 + 0 + 16 = 44.5
+    assert scores["total"] == 44.5
+
+
+def test_total_score_custom_weights_backward_compat():
+    """Custom weights with only old fields should still work."""
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=2.0)
+    weights = ScoringWeights(
+        reward=0.5, feature=0.3, promotion=0.2, annual_fee_roi=0.0
+    )
+    scores = calculate_total_score(
+        card=card,
+        spending_habits={"dining": 1.0},
+        monthly_amount=30000,
+        preferences=[],
+        promotions=[],
+        weights=weights,
+    )
+    # reward: 40*0.5=20, feature: 50*0.3=15, promo: 0*0.2=0, roi: 80*0=0
+    # total = 35.0
+    assert scores["total"] == 35.0
 
 
 def test_recommendation_engine(db_session):
