@@ -3,6 +3,8 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from src.scheduler.jobs import (
+    check_expiring_promotions,
+    check_new_promotions,
     cleanup_expired_promotions,
     run_daily_promotion_crawl,
     run_weekly_card_crawl,
@@ -34,6 +36,22 @@ def create_scheduler() -> BackgroundScheduler:
         CronTrigger(hour=4, minute=0),
         id="cleanup_expired",
         name="Cleanup Expired Promotions",
+    )
+
+    # 每日 06:00 檢查新優惠並通知（在爬蟲之後）
+    scheduler.add_job(
+        check_new_promotions,
+        CronTrigger(hour=6, minute=0),
+        id="check_new_promotions",
+        name="Check New Promotions",
+    )
+
+    # 每日 09:00 檢查即將到期優惠並通知
+    scheduler.add_job(
+        check_expiring_promotions,
+        CronTrigger(hour=9, minute=0),
+        id="check_expiring_promotions",
+        name="Check Expiring Promotions",
     )
 
     logger.info("Scheduler configured with jobs")

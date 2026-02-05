@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     crawler_delay_max: int = 5
     crawler_max_retries: int = 3
 
+    # Notifications
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    discord_webhook_url: str = ""
+    notification_enabled: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:
