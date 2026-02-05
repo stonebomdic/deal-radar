@@ -388,3 +388,108 @@ def test_recommendation_engine(db_session):
 
     assert len(recommendations) == 1  # 年費卡被過濾掉
     assert recommendations[0].card.name == "高回饋卡"
+
+
+def test_generate_reasons_expanded_categories():
+    """Expanded category names like convenience_store should map to 超商."""
+    engine = RecommendationEngine.__new__(RecommendationEngine)
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=2.0)
+    request = RecommendRequest(
+        spending_habits={"convenience_store": 0.6, "dining": 0.4},
+        monthly_amount=30000,
+        preferences=[],
+    )
+    scores = {
+        "reward_score": 80,
+        "feature_score": 50,
+        "promotion_score": 0,
+        "annual_fee_roi_score": 80,
+    }
+    reasons = engine._generate_reasons(card, request, scores, [])
+    # Top category is convenience_store, should show "超商"
+    assert any("超商" in r for r in reasons)
+
+
+def test_generate_reasons_roi_reason():
+    """When ROI score > 60, should mention annual fee ROI."""
+    engine = RecommendationEngine.__new__(RecommendationEngine)
+    card = CreditCard(name="Test", annual_fee=2000, base_reward_rate=3.0)
+    request = RecommendRequest(
+        spending_habits={"dining": 1.0},
+        monthly_amount=50000,
+        preferences=[],
+    )
+    scores = {
+        "reward_score": 60,
+        "feature_score": 50,
+        "promotion_score": 0,
+        "annual_fee_roi_score": 70,
+    }
+    reasons = engine._generate_reasons(card, request, scores, [])
+    assert any("年費" in r and "回饋" in r for r in reasons)
+
+
+def test_generate_reasons_reward_limit_warning():
+    """When promotions have reward_limit, should warn about limits."""
+    engine = RecommendationEngine.__new__(RecommendationEngine)
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=1.0)
+    request = RecommendRequest(
+        spending_habits={"dining": 1.0},
+        monthly_amount=30000,
+        preferences=[],
+    )
+    promo = Promotion(
+        title="Dining", category="dining", reward_rate=5.0, reward_limit=200
+    )
+    scores = {
+        "reward_score": 50,
+        "feature_score": 50,
+        "promotion_score": 25,
+        "annual_fee_roi_score": 80,
+    }
+    reasons = engine._generate_reasons(card, request, scores, [promo])
+    assert any("上限" in r for r in reasons)
+
+
+def test_generate_reasons_high_rate_promo_callout():
+    """High-rate promotions (>= 3%) should be called out specifically."""
+    engine = RecommendationEngine.__new__(RecommendationEngine)
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=1.0)
+    request = RecommendRequest(
+        spending_habits={"dining": 0.5, "online_shopping": 0.5},
+        monthly_amount=30000,
+        preferences=[],
+    )
+    promo = Promotion(
+        title="Dining Special", category="dining", reward_rate=8.0
+    )
+    scores = {
+        "reward_score": 70,
+        "feature_score": 50,
+        "promotion_score": 40,
+        "annual_fee_roi_score": 80,
+    }
+    reasons = engine._generate_reasons(card, request, scores, [promo])
+    assert any("8" in r and "%" in r and "餐飲" in r for r in reasons)
+
+
+def test_generate_reasons_max_five():
+    """Reasons should be capped at 5."""
+    engine = RecommendationEngine.__new__(RecommendationEngine)
+    card = CreditCard(name="Test", annual_fee=0, base_reward_rate=3.0)
+    request = RecommendRequest(
+        spending_habits={"dining": 1.0},
+        monthly_amount=50000,
+        preferences=[],
+    )
+    promo = Promotion(
+        title="Dining", category="dining", reward_rate=8.0, reward_limit=500
+    )
+    scores = {
+        "reward_score": 90,
+        "feature_score": 80,
+        "promotion_score": 50,
+        "annual_fee_roi_score": 80,
+    }
+    reasons = engine._generate_reasons(card, request, scores, [promo])
+    assert len(reasons) <= 5
