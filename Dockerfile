@@ -50,6 +50,10 @@ RUN apt-get update && \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Copy entrypoint script
+COPY scripts/entrypoint.sh ./scripts/entrypoint.sh
+RUN chmod +x ./scripts/entrypoint.sh
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser
 
