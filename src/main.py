@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -44,15 +44,19 @@ app = FastAPI(
     redoc_url=redoc_url,
 )
 
+# Configure CORS origins
+default_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+if settings.cors_origins:
+    cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+else:
+    cors_origins = default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(api_router)
@@ -64,7 +68,14 @@ async def health_check():
 
 
 @app.get("/api/admin/status")
-async def admin_status():
+async def admin_status(x_admin_key: str = Header(None)):
+    # Require admin key in production
+    if settings.is_production:
+        if not settings.admin_api_key:
+            raise HTTPException(status_code=503, detail="Admin API not configured")
+        if x_admin_key != settings.admin_api_key:
+            raise HTTPException(status_code=401, detail="Invalid admin key")
+
     jobs = []
     if scheduler:
         for job in scheduler.get_jobs():

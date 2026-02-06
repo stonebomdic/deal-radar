@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     discord_webhook_url: str = ""
     notification_enabled: bool = True
 
+    # CORS (comma-separated origins, empty means localhost only)
+    cors_origins: str = ""
+
+    # Admin
+    admin_api_key: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
