@@ -50,18 +50,26 @@ RUN apt-get update && \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
 # Copy Playwright browsers from builder
-COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
+COPY --from=builder /root/.cache/ms-playwright /home/appuser/.cache/ms-playwright
 
 # Copy application source code
 COPY pyproject.toml ./
 COPY src/ ./src/
 
-# Install the project in editable-like mode (register the package)
-RUN pip install --no-cache-dir --no-deps -e .
+# Install the project (non-editable)
+RUN pip install --no-cache-dir --no-deps .
 
 # Create directories for data and logs
 RUN mkdir -p /app/data /app/logs
+
+# Set ownership of app directory to appuser
+RUN chown -R appuser:appuser /app /home/appuser/.cache
+
+USER appuser
 
 # Expose the API port
 EXPOSE 8000

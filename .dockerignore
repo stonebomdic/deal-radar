@@ -23,3 +23,7 @@ htmlcov/
 *.swo
 .claude/
 docs/plans/
+tests/
+*.md
+Dockerfile
+docker-compose*.yml
