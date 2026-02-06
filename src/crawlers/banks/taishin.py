@@ -148,9 +148,16 @@ class TaishinCrawler(BaseCrawler):
             name = link.get('name', '')
             url = link.get('url', '')
 
+            # 過濾非卡片頁面
             if 'debit-card' in url or 'corporate-card' in url:
                 continue
+            if '/overview/' in url or 'index.html' in url:
+                continue
             if '簽帳金融卡' in name or '企業卡' in name:
+                continue
+            # 過濾非卡片名稱（總覽頁、介紹頁等）
+            invalid_names = ['總覽', '首頁', '介紹', '比較', '查詢', '瀏覽', '申辦']
+            if any(kw in name for kw in invalid_names):
                 continue
 
             card_links.append(link)
@@ -177,6 +184,12 @@ class TaishinCrawler(BaseCrawler):
         name = h1.get_text().strip() if h1 else link.get('name', '')
 
         if not name:
+            return None, []
+
+        # 驗證卡片名稱，過濾非卡片頁面
+        invalid_names = ['總覽', '首頁', '介紹', '比較', '查詢', '瀏覽', '申辦', '信用卡列表']
+        if any(kw in name for kw in invalid_names):
+            logger.debug(f"Skipping invalid card name: {name}")
             return None, []
 
         card_type = self._detect_card_type(name, url)

@@ -9,30 +9,33 @@ export const metadata: Metadata = {
 
 function Navbar() {
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <Link href="/" className="text-xl font-bold text-gray-900">
-            信用卡查詢
+    <nav className="fixed top-4 left-4 right-4 z-50 bg-white/90 backdrop-blur-lg border border-[#99F6E4] rounded-2xl shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-xl font-bold text-[#0F766E] hover:text-[#0D9488] transition-colors duration-200"
+          >
+            信用卡推薦
           </Link>
-          <div className="flex space-x-8">
+          <div className="flex items-center gap-8">
             <Link
               href="/"
-              className="text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium"
+              className="text-[#475569] hover:text-[#0F766E] transition-colors duration-200 text-sm font-medium"
             >
               首頁
             </Link>
             <Link
               href="/cards"
-              className="text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium"
+              className="text-[#475569] hover:text-[#0F766E] transition-colors duration-200 text-sm font-medium"
             >
               信用卡
             </Link>
             <Link
               href="/recommend"
-              className="text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-[#0369A1] hover:bg-[#0284C7] text-white text-sm font-medium rounded-lg transition-colors duration-200 cursor-pointer"
             >
-              推薦
+              開始推薦
             </Link>
           </div>
         </div>
@@ -48,14 +51,23 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-TW">
-      <body className="bg-gray-50 min-h-screen">
+      <body className="bg-[#F0FDFA] min-h-screen">
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
+        <main className="pt-24 pb-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {children}
+          </div>
         </main>
-        <footer className="bg-white border-t border-gray-200 mt-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-gray-500 text-sm">
-            台灣信用卡查詢與推薦系統
+        <footer className="bg-white border-t border-[#E2E8F0]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="text-[#134E4A] font-semibold">
+                台灣信用卡推薦平台
+              </div>
+              <div className="text-[#64748B] text-sm">
+                幫助您找到最適合的信用卡
+              </div>
+            </div>
           </div>
         </footer>
       </body>

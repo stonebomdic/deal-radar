@@ -56,8 +56,25 @@ class BaseCrawler(ABC):
             "promotions_count": len(promotions),
         }
 
+    # 非卡片名稱的關鍵字（用於過濾爬蟲誤抓的資料）
+    INVALID_CARD_NAME_KEYWORDS = [
+        '總覽', '首頁', '介紹', '比較', '查詢', '瀏覽', '申辦',
+        '信用卡列表', '卡片一覽', '全部卡片', '更多卡片',
+    ]
+
+    def is_valid_card_name(self, name: str) -> bool:
+        """驗證卡片名稱是否有效"""
+        if not name or len(name) < 2 or len(name) > 50:
+            return False
+        return not any(kw in name for kw in self.INVALID_CARD_NAME_KEYWORDS)
+
     def save_card(self, card_data: dict) -> CreditCard:
         """儲存或更新信用卡"""
+        name = card_data.get("name", "")
+        if not self.is_valid_card_name(name):
+            logger.warning(f"Skipping invalid card name: {name}")
+            return None
+
         card = (
             self.db.query(CreditCard)
             .filter_by(bank_id=self.bank.id, name=card_data["name"])
