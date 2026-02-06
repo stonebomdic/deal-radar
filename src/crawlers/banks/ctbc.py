@@ -8,6 +8,11 @@ from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
 from src.crawlers.base import BaseCrawler
+from src.crawlers.utils import (
+    clean_text,
+    detect_promotion_category,
+    extract_promotions_from_text,
+)
 from src.models import CreditCard, Promotion
 
 
@@ -107,8 +112,9 @@ class CtbcCrawler(BaseCrawler):
                 card_data = self._parse_card_json(card_json)
                 if card_data:
                     card = self.save_card(card_data)
-                    cards.append(card)
-                    logger.info(f"Saved card: {card_data['name']}")
+                    if card:  # 過濾掉無效卡片
+                        cards.append(card)
+                        logger.info(f"Saved card: {card_data['name']}")
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON API response: {e}")
@@ -236,13 +242,12 @@ class CtbcCrawler(BaseCrawler):
     def _fetch_promotions_for_cards(self, cards: List[CreditCard]) -> List[Promotion]:
         """為指定卡片擷取優惠活動"""
         import time
-        from datetime import datetime
 
         promotions = []
         page = self._page
 
         for card in cards:
-            if not card.apply_url:
+            if not card or not card.apply_url:
                 continue
 
             try:
@@ -252,36 +257,29 @@ class CtbcCrawler(BaseCrawler):
 
                 html = page.content()
                 soup = BeautifulSoup(html, "lxml")
-                body_text = " ".join(soup.get_text().split())
 
-                # 擷取優惠
-                promo_patterns = [
-                    r"(\d+(?:\.\d+)?%\s*(?:回饋|現金回饋)[^，。]{0,30})",
-                    r"(最高\s*\d+(?:\.\d+)?%[^，。]{0,30})",
-                    r"(國[內外]消費[^，。]*\d+(?:\.\d+)?%[^，。]{0,20})",
-                ]
+                # 移除導航、頁尾等雜訊元素
+                for tag in soup.find_all(["nav", "footer", "header", "script", "style"]):
+                    tag.decompose()
 
-                seen = set()
-                for pattern in promo_patterns:
-                    matches = re.findall(pattern, body_text)
-                    for match in matches:
-                        title = match.strip()[:60]
-                        if title and title not in seen and len(title) > 5:
-                            seen.add(title)
-                            promo_data = {
-                                "title": title,
-                                "description": match,
-                                "source_url": card.apply_url,
-                                "category": self._detect_category(match),
-                            }
-                            promo = self.save_promotion(card, promo_data)
-                            promotions.append(promo)
-                            logger.debug(f"Saved promotion: {title}")
+                # 取得清理後的文字
+                body_text = clean_text(soup.get_text())
 
-                            if len([p for p in promotions if p.card_id == card.id]) >= 3:
-                                break
-                    if len([p for p in promotions if p.card_id == card.id]) >= 3:
-                        break
+                # 使用共用工具擷取優惠
+                extracted = extract_promotions_from_text(body_text, max_count=3)
+
+                for promo_info in extracted:
+                    promo_data = {
+                        "title": promo_info["title"],
+                        "description": promo_info["description"],
+                        "source_url": card.apply_url,
+                        "category": detect_promotion_category(promo_info["title"]),
+                        "reward_rate": promo_info.get("reward_rate"),
+                    }
+                    promo = self.save_promotion(card, promo_data)
+                    if promo:
+                        promotions.append(promo)
+                        logger.debug(f"Saved promotion: {promo_info['title']}")
 
             except Exception as e:
                 logger.warning(f"Error fetching promotions for {card.name}: {e}")
@@ -297,18 +295,3 @@ class CtbcCrawler(BaseCrawler):
         cards = self.db.query(CreditCard).filter_by(bank_id=self.bank.id).limit(10).all()
         return self._fetch_promotions_for_cards(cards)
 
-    def _detect_category(self, text: str) -> str:
-        """根據文字判斷優惠類別"""
-        category_keywords = {
-            "dining": ["餐飲", "美食", "餐廳", "吃"],
-            "online_shopping": ["網購", "線上", "電商", "蝦皮", "momo", "Yahoo"],
-            "transport": ["交通", "加油", "高鐵", "台鐵", "捷運"],
-            "overseas": ["海外", "國外", "出國", "日本", "韓國"],
-            "convenience_store": ["超商", "7-11", "全家", "萊爾富"],
-            "department_store": ["百貨", "週年慶", "SOGO", "新光", "遠東"],
-            "travel": ["旅遊", "哩程", "飛行", "航空", "機場", "訂房"],
-        }
-        for category, keywords in category_keywords.items():
-            if any(kw in text for kw in keywords):
-                return category
-        return "others"

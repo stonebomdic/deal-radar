@@ -8,6 +8,11 @@ from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
 from src.crawlers.base import BaseCrawler
+from src.crawlers.utils import (
+    clean_text,
+    detect_promotion_category,
+    extract_promotions_from_text,
+)
 from src.models import CreditCard, Promotion
 
 # 華南銀行信用卡介紹頁
@@ -320,51 +325,21 @@ class HncbCrawler(BaseCrawler):
 
     def _extract_promotions(self, text: str, url: str) -> List[dict]:
         """擷取優惠活動"""
+        # 使用共用工具擷取並清理優惠
+        text = clean_text(text)
+        extracted = extract_promotions_from_text(text, max_count=3)
+
         promotions = []
-
-        promo_patterns = [
-            r"(最高\s*[\d.]+\s*%\s*(?:回饋|現金回饋|刷卡金)[^。，]{0,30})",
-            r"(國[內外]消費[^。，]*[\d.]+\s*%[^。，]{0,20})",
-            r"(新戶[^。，]*(?:回饋|禮|贈)[^。，]{0,30})",
-            r"(首刷[^。，]*(?:回饋|禮|贈)[^。，]{0,30})",
-        ]
-
-        seen = set()
-        for pattern in promo_patterns:
-            matches = re.findall(pattern, text)
-            for match in matches:
-                title = match.strip()[:60]
-                if title and title not in seen and len(title) > 5:
-                    seen.add(title)
-                    promotions.append({
-                        "title": title,
-                        "description": match,
-                        "source_url": url,
-                        "category": self._detect_category(match),
-                    })
-                    if len(promotions) >= 3:
-                        break
-            if len(promotions) >= 3:
-                break
+        for promo_info in extracted:
+            promotions.append({
+                "title": promo_info["title"],
+                "description": promo_info["description"],
+                "source_url": url,
+                "category": detect_promotion_category(promo_info["title"]),
+                "reward_rate": promo_info.get("reward_rate"),
+            })
 
         return promotions
-
-    def _detect_category(self, text: str) -> str:
-        """根據文字判斷優惠類別"""
-        category_keywords = {
-            "dining": ["餐飲", "美食", "餐廳", "吃"],
-            "online_shopping": ["網購", "線上", "電商", "網路購物"],
-            "transport": ["交通", "加油", "高鐵", "台鐵", "捷運"],
-            "overseas": ["海外", "國外", "出國"],
-            "convenience_store": ["超商", "7-11", "全家", "萊爾富"],
-            "department_store": ["百貨", "週年慶"],
-            "travel": ["旅遊", "哩程", "飛行", "航空", "機場", "訂房"],
-            "mobile_pay": ["行動支付", "Apple Pay", "Google Pay"],
-        }
-        for category, keywords in category_keywords.items():
-            if any(kw in text for kw in keywords):
-                return category
-        return "others"
 
     def fetch_cards(self) -> List[CreditCard]:
         """擷取卡片（實作抽象方法）"""

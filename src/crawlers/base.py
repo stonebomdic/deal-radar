@@ -60,6 +60,8 @@ class BaseCrawler(ABC):
     INVALID_CARD_NAME_KEYWORDS = [
         '總覽', '首頁', '介紹', '比較', '查詢', '瀏覽', '申辦',
         '信用卡列表', '卡片一覽', '全部卡片', '更多卡片',
+        '信用卡推薦', '信用卡權益', '優惠活動', '最新消息',
+        '權益說明', '回饋說明', '活動說明',
     ]
 
     def is_valid_card_name(self, name: str) -> bool:
