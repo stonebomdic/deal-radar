@@ -1,0 +1,20 @@
+# Development overrides - loaded automatically by docker compose up
+# To run in production mode: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DEBUG=true
+    # Override entrypoint to run init+seed then serve with reload
+    entrypoint: >
+      bash -c "
+        python -m src.cli init &&
+        python -m src.cli seed &&
+        uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
+      "
