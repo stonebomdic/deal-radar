@@ -4,17 +4,35 @@
 
 ## 功能
 
-- 爬取台灣主要銀行信用卡資訊（目前支援中國信託）
-- 信用卡優惠活動查詢
-- 根據消費習慣推薦最適合的信用卡
+- 爬取台灣 10 家主要銀行信用卡資訊
+- 信用卡優惠活動查詢與分類
+- 根據消費習慣智慧推薦最適合的信用卡
 - RESTful API 提供資料查詢
+- Next.js 前端介面
 - 排程自動更新信用卡資料
+- Docker 容器化部署
 
-## 安裝
+## 支援銀行
+
+| 銀行代碼 | 銀行名稱 |
+|----------|----------|
+| `ctbc` | 中國信託 |
+| `esun` | 玉山銀行 |
+| `taishin` | 台新銀行 |
+| `cathay` | 國泰世華 |
+| `fubon` | 富邦銀行 |
+| `sinopac` | 永豐銀行 |
+| `firstbank` | 第一銀行 |
+| `hncb` | 華南銀行 |
+| `megabank` | 兆豐銀行 |
+| `ubot` | 聯邦銀行 |
+
+## 快速開始
 
 ### 環境需求
 
 - Python 3.9+
+- Node.js 18+ (前端)
 - pip
 
 ### 安裝步驟
@@ -25,64 +43,65 @@ python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # .venv\Scripts\activate  # Windows
 
-# 安裝依賴
+# 安裝 Python 依賴
 pip install -e ".[dev]"
 
 # 安裝 Playwright 瀏覽器（爬蟲需要）
 playwright install chromium
+
+# 安裝前端依賴
+cd frontend && npm install && cd ..
 ```
 
-## CLI 使用說明
+### 初始化與執行
 
-本專案提供命令列工具進行各項操作：
+```bash
+# 初始化資料庫
+python -m src.cli init
+
+# 匯入銀行種子資料
+python -m src.cli seed
+
+# 執行爬蟲（所有銀行或指定銀行）
+python -m src.cli crawl
+python -m src.cli crawl --bank esun
+
+# 啟動後端 API 服務
+python -m src.cli serve
+
+# 啟動前端開發伺服器（另開終端）
+npm run dev --prefix frontend
+```
+
+服務啟動後：
+- 後端 API: http://localhost:8000
+- 前端介面: http://localhost:3000
+- API 文件: http://localhost:8000/docs
+
+## Docker 部署
+
+```bash
+# 開發環境
+docker-compose up --build
+
+# 生產環境
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+```
+
+## CLI 指令
 
 ```bash
 python -m src.cli <command>
 ```
 
-### 可用指令
-
-#### init - 初始化資料庫
-
-```bash
-python -m src.cli init
-```
-
-建立資料庫表格結構。首次使用前必須執行。
-
-#### seed - 匯入種子資料
-
-```bash
-python -m src.cli seed
-```
-
-匯入預設的銀行資料。
-
-#### crawl - 執行爬蟲
-
-```bash
-# 執行所有銀行爬蟲
-python -m src.cli crawl
-
-# 指定銀行
-python -m src.cli crawl --bank ctbc
-python -m src.cli crawl -b ctbc
-```
-
-目前支援的銀行代碼：
-- `ctbc` - 中國信託
-
-#### serve - 啟動 API 服務
-
-```bash
-python -m src.cli serve
-```
-
-啟動 FastAPI 服務，預設監聽 `http://localhost:8000`
+| 指令 | 說明 |
+|------|------|
+| `init` | 初始化資料庫表格結構 |
+| `seed` | 匯入預設銀行資料 |
+| `crawl` | 執行爬蟲（`--bank` 指定銀行） |
+| `serve` | 啟動 API 服務 |
 
 ## API 端點
-
-啟動服務後，可訪問 http://localhost:8000/docs 查看完整的 Swagger API 文件。
 
 ### 主要端點
 
@@ -102,7 +121,7 @@ python -m src.cli serve
 - `page` - 頁碼（預設 1）
 - `size` - 每頁筆數（預設 20，最大 100）
 - `bank_id` - 篩選特定銀行
-- `card_type` - 篩選卡片類型（visa, mastercard, jcb）
+- `card_type` - 篩選卡片類型
 
 ### 推薦 API 範例
 
@@ -112,9 +131,10 @@ curl -X POST http://localhost:8000/api/recommend \
   -d '{
     "spending_habits": {
       "dining": 0.3,
-      "shopping": 0.4,
+      "online_shopping": 0.3,
       "travel": 0.2,
-      "other": 0.1
+      "convenience_store": 0.1,
+      "supermarket": 0.1
     },
     "monthly_amount": 30000,
     "preferences": ["no_annual_fee", "high_reward"],
@@ -122,44 +142,63 @@ curl -X POST http://localhost:8000/api/recommend \
   }'
 ```
 
+## 推薦引擎
+
+系統使用加權評分演算法，綜合考量以下因素：
+
+| 評分項目 | 權重 | 說明 |
+|----------|------|------|
+| 回饋評分 | 40% | 根據消費類別計算預期回饋 |
+| 功能評分 | 25% | 卡片特色與用戶偏好匹配度 |
+| 年費 ROI | 20% | 年費與預期回饋的投資報酬率 |
+| 優惠評分 | 15% | 當前優惠活動加成 |
+
+### 支援的消費類別
+
+`dining`, `online_shopping`, `travel`, `overseas`, `convenience_store`, `supermarket`, `department_store`, `transport`, `mobile_pay`, `entertainment`, `insurance`, `medical`
+
+### 支援的偏好設定
+
+`no_annual_fee`, `high_reward`, `airport_lounge`, `travel_insurance`, `mileage`, `mobile_payment`, `streaming`, `ecommerce`
+
 ## 專案結構
 
 ```
 credit-card-crawler/
 ├── src/
 │   ├── api/                 # FastAPI 路由與 schemas
-│   │   ├── cards.py         # 信用卡相關 API
-│   │   ├── recommend.py     # 推薦 API
-│   │   ├── router.py        # 路由整合
-│   │   └── schemas.py       # Pydantic schemas
 │   ├── crawlers/            # 爬蟲模組
 │   │   ├── banks/           # 各銀行爬蟲實作
-│   │   │   └── ctbc.py      # 中國信託爬蟲
+│   │   │   ├── ctbc.py      # 中國信託
+│   │   │   ├── esun.py      # 玉山銀行
+│   │   │   ├── taishin.py   # 台新銀行
+│   │   │   ├── cathay.py    # 國泰世華
+│   │   │   ├── fubon.py     # 富邦銀行
+│   │   │   ├── sinopac.py   # 永豐銀行
+│   │   │   ├── firstbank.py # 第一銀行
+│   │   │   ├── hncb.py      # 華南銀行
+│   │   │   ├── megabank.py  # 兆豐銀行
+│   │   │   └── ubot.py      # 聯邦銀行
 │   │   ├── base.py          # 爬蟲基類
-│   │   └── utils.py         # 爬蟲工具函式
+│   │   └── utils.py         # 共用工具（文字清理、優惠擷取）
 │   ├── db/                  # 資料庫模組
-│   │   ├── database.py      # 資料庫連線設定
-│   │   └── seed.py          # 種子資料
 │   ├── models/              # ORM 模型
-│   │   ├── bank.py          # 銀行模型
-│   │   ├── card.py          # 信用卡模型
-│   │   └── promotion.py     # 優惠活動模型
 │   ├── recommender/         # 推薦引擎
 │   │   ├── engine.py        # 推薦邏輯
 │   │   └── scoring.py       # 評分函式
 │   ├── scheduler/           # 排程系統
-│   │   ├── jobs.py          # 排程任務
-│   │   └── runner.py        # 排程執行器
 │   ├── cli.py               # CLI 入口
 │   ├── config.py            # 設定檔
 │   └── main.py              # FastAPI 應用程式入口
+├── frontend/                # Next.js 前端
+│   ├── src/
+│   │   ├── app/             # App Router 頁面
+│   │   └── components/      # React 元件
+│   └── package.json
 ├── tests/                   # 測試檔案
-│   ├── test_api.py
-│   ├── test_crawler_base.py
-│   ├── test_crawler_ctbc.py
-│   ├── test_models.py
-│   └── test_recommender.py
-├── pyproject.toml           # 專案設定與依賴
+├── docker-compose.yml       # Docker 配置
+├── pyproject.toml           # Python 專案設定
+├── CLAUDE.md                # Claude Code 開發指南
 └── README.md
 ```
 

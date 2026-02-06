@@ -47,7 +47,32 @@ python -m src.cli crawl --bank ctbc
 python -m src.cli serve
 ```
 
-Supported bank codes: `ctbc` (中國信託), `esun` (玉山銀行), `sinopac` (永豐銀行)
+Supported bank codes: `ctbc` (中國信託), `esun` (玉山銀行), `sinopac` (永豐銀行), `cathay` (國泰世華), `fubon` (富邦銀行), `taishin` (台新銀行), `firstbank` (第一銀行), `hncb` (華南銀行), `megabank` (兆豐銀行), `ubot` (聯邦銀行)
+
+## Frontend Commands
+
+```bash
+# Install frontend dependencies (requires Node.js 18+)
+cd frontend && npm install
+
+# Start frontend dev server
+npm run dev --prefix frontend
+
+# Build frontend
+npm run build --prefix frontend
+```
+
+The frontend is a Next.js 14+ app with Tailwind CSS. It proxies API requests to `localhost:8000`.
+
+## Docker Commands
+
+```bash
+# Build and run with docker-compose
+docker-compose up --build
+
+# Production mode
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+```
 
 ## Architecture Overview
 
@@ -68,25 +93,35 @@ All bank crawlers inherit from `BaseCrawler` (`src/crawlers/base.py`) and must i
 
 The base class provides:
 - `bank` property - Auto-creates or fetches the Bank record
-- `save_card(card_data)` - Upsert logic for credit cards (deduplicates by bank_id + name)
+- `save_card(card_data)` - Upsert logic for credit cards (deduplicates by bank_id + name, validates card names)
 - `save_promotion(card, promo_data)` - Upsert logic for promotions (deduplicates by card_id + title)
 - `run()` - Orchestrates the crawl workflow
+- `is_valid_card_name(name)` - Filters out invalid card names (navigation items, overview pages)
 
-All current crawlers use **Playwright with `playwright-stealth`** for browser automation to bypass anti-bot protections. Each crawler manages its own browser lifecycle with `_init_browser()` / `_close_browser()` methods and overrides `run()` to wrap the base workflow with browser setup/teardown.
+All crawlers use **Playwright with `playwright-stealth`** for browser automation. Each crawler manages its own browser lifecycle with `_init_browser()` / `_close_browser()` methods.
+
+**Crawler Utilities** (`src/crawlers/utils.py`): Shared functions for text cleaning and promotion extraction:
+- `clean_text()` - Removes noise characters and normalizes whitespace
+- `extract_promotions_from_text()` - Unified promotion extraction with noise filtering
+- `detect_promotion_category()` - Categorizes promotions (dining, transport, overseas, etc.)
 
 To add a new bank crawler:
 1. Create a file in `src/crawlers/banks/` following the pattern in existing crawlers (e.g., `esun.py`)
 2. Set class attributes: `bank_name`, `bank_code`, `base_url`
-3. Implement `fetch_cards()` and `fetch_promotions()`
+3. Implement `fetch_cards()` and `fetch_promotions()`, using shared utilities from `utils.py`
 4. Register the crawler in `src/crawlers/banks/__init__.py` and `src/cli.py`
 
 ### Recommendation Engine
 
 The recommendation system (`src/recommender/`) uses a weighted scoring approach:
-- `scoring.py` - Individual score calculators (reward, feature, promotion scores)
+- `scoring.py` - Individual score calculators (reward, feature, promotion, annual_fee_roi)
 - `engine.py` - Orchestrates filtering, scoring, and ranking
 
-Scores are weighted: reward (50%) + feature (30%) + promotion (20%)
+Scoring weights: reward (40%) + feature (25%) + promotion (15%) + annual_fee_roi (20%)
+
+Key functions:
+- `estimate_monthly_reward()` - Shared helper for calculating expected rewards with limit awareness
+- `calculate_total_score()` - Combines all score components
 
 ### Scheduler
 
