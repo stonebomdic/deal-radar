@@ -128,10 +128,19 @@ def refresh_flash_deals(session: Session, platform: str) -> int:
         session.add(snapshot)
         session.flush()
 
-        if last is not None and deal.sale_price < last.price:
-            message = format_price_drop_alert(matched, snapshot, [], False)
+        is_price_drop = last is not None and deal.sale_price < last.price
+        is_target_reached = (
+            matched.target_price is not None and deal.sale_price <= matched.target_price
+        )
+
+        if is_price_drop or is_target_reached:
+            notification_type = (
+                NotificationType.target_price_reached if is_target_reached
+                else NotificationType.price_drop
+            )
+            message = format_price_drop_alert(matched, snapshot, [], is_target_reached)
             dispatcher = NotificationDispatcher(session)
-            dispatcher.dispatch(NotificationType.price_drop, [snapshot.id], message)
+            dispatcher.dispatch(notification_type, [snapshot.id], message)
 
     session.commit()
     return count
