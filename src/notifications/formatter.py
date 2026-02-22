@@ -188,3 +188,56 @@ def format_new_cards(cards: List[CreditCard]) -> Dict[str, Any]:
         discord_embeds.append(embed)
 
     return {"telegram": telegram_text, "discord_embeds": discord_embeds}
+
+
+def format_price_drop_alert(
+    product,
+    snapshot,
+    top_cards: list,
+    is_target_reached: bool = False,
+) -> dict:
+    """格式化降價或目標價通知（含 Top 3 最佳結帳卡）"""
+    emoji = "🎯" if is_target_reached else "📉"
+    title = "目標價達成！" if is_target_reached else "價格警示"
+    platform_name = "PChome" if product.platform == "pchome" else "Momo"
+
+    discount_text = ""
+    if snapshot.original_price and snapshot.original_price > snapshot.price:
+        pct = round(snapshot.price / snapshot.original_price * 100)
+        discount_text = f"（折 {pct} 折）"
+
+    card_lines = "\n".join(
+        f"  {i + 1}. {r['card'].name}：回饋 {r['best_rate']}% = "
+        f"-${r['reward_amount']:.0f}，實付 ${snapshot.price - r['reward_amount']:.0f}"
+        for i, r in enumerate(top_cards)
+    )
+
+    telegram_text = (
+        f"{emoji} {title}：{product.name}\n\n"
+        f"🏪 {platform_name} 現價：${snapshot.price:,}{discount_text}\n\n"
+        f"💳 最佳結帳方式：\n{card_lines}\n\n"
+        f"🔗 {product.url}"
+    )
+
+    embed = {
+        "title": f"{emoji} {title}：{product.name}",
+        "color": 0x00B894 if is_target_reached else 0xE17055,
+        "fields": [
+            {
+                "name": f"🏪 {platform_name} 現價",
+                "value": f"**${snapshot.price:,}**{discount_text}",
+                "inline": True,
+            },
+            {
+                "name": "💳 最佳結帳卡",
+                "value": "\n".join(
+                    f"{i + 1}. {r['card'].name} (-${r['reward_amount']:.0f})"
+                    for i, r in enumerate(top_cards)
+                ),
+                "inline": False,
+            },
+        ],
+        "url": product.url,
+    }
+
+    return {"telegram": telegram_text, "discord_embeds": [embed]}
