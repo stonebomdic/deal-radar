@@ -11,6 +11,7 @@ export default function SearchBar({ onResults, onProductAdded }: Props) {
   const [input, setInput] = useState("");
   const [platform, setPlatform] = useState("pchome");
   const [loading, setLoading] = useState(false);
+  const [momoHint, setMomoHint] = useState(false);
 
   const isUrl = input.startsWith("http");
 
@@ -27,43 +28,56 @@ export default function SearchBar({ onResults, onProductAdded }: Props) {
       });
       if (resp.ok) onProductAdded();
     } else {
-      const resp = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform, keyword: input }),
-      });
-      const data = await resp.json();
-      onResults(data.results || []);
+      if (platform === "momo") {
+        const momoSearchUrl = `https://www.momoshop.com.tw/search/searchShop.jsp?keyword=${encodeURIComponent(input)}`;
+        window.open(momoSearchUrl, "_blank", "noopener,noreferrer");
+        setMomoHint(true);
+      } else {
+        const resp = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform, keyword: input }),
+        });
+        const data = await resp.json();
+        onResults(data.results || []);
+      }
     }
 
     setLoading(false);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      {!isUrl && (
-        <select
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-          className="px-3 py-2 rounded-xl border bg-white/60 backdrop-blur"
+    <div>
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        {!isUrl && (
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+            className="px-3 py-2 rounded-xl border bg-white/60 backdrop-blur"
+          >
+            <option value="pchome">PChome</option>
+            <option value="momo">Momo</option>
+          </select>
+        )}
+        <input
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setMomoHint(false); }}
+          placeholder="貼上商品連結或輸入關鍵字..."
+          className="flex-1 px-4 py-2 rounded-xl border bg-white/60 backdrop-blur focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+        <button
+          type="submit"
+          disabled={loading || !input.trim()}
+          className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
         >
-          <option value="pchome">PChome</option>
-          <option value="momo">Momo</option>
-        </select>
+          {loading ? "搜尋中..." : isUrl ? "加入追蹤" : "搜尋"}
+        </button>
+      </form>
+      {momoHint && (
+        <p className="mt-2 text-sm text-blue-600">
+          已在新視窗開啟 Momo 搜尋，找到商品後請複製連結貼回此處追蹤
+        </p>
       )}
-      <input
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="貼上商品連結或輸入關鍵字..."
-        className="flex-1 px-4 py-2 rounded-xl border bg-white/60 backdrop-blur focus:outline-none focus:ring-2 focus:ring-blue-400"
-      />
-      <button
-        type="submit"
-        disabled={loading || !input.trim()}
-        className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
-      >
-        {loading ? "搜尋中..." : isUrl ? "加入追蹤" : "搜尋"}
-      </button>
-    </form>
+    </div>
   );
 }
