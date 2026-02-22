@@ -190,3 +190,48 @@ def calculate_total_score(
         "promotion_score": promotion_score,
         "annual_fee_roi_score": roi_score,
     }
+
+
+def calculate_shopping_reward(
+    card: CreditCard,
+    platform: str,
+    amount: int,
+    promotions: List[Promotion],
+) -> Dict:
+    """計算單次購物的最佳回饋
+
+    Args:
+        card: 信用卡
+        platform: "pchome" 或 "momo"
+        amount: 購物金額（元）
+        promotions: 該卡目前有效的優惠列表
+
+    Returns:
+        {"reward_amount": float, "best_rate": float, "reason": str}
+    """
+    platform_category = {"pchome": "online_shopping", "momo": "online_shopping"}
+    category = platform_category.get(platform, "online_shopping")
+
+    base_rate = card.base_reward_rate or 0.0
+    best_rate = base_rate
+    best_limit = None
+
+    for promo in promotions:
+        if promo.category == category and promo.reward_rate:
+            if promo.reward_rate > best_rate:
+                best_rate = promo.reward_rate
+                best_limit = promo.reward_limit
+
+    reward = amount * (best_rate / 100)
+    if best_limit is not None and reward > best_limit:
+        reward = float(best_limit)
+
+    reason = f"{platform.upper()} 回饋 {best_rate}%"
+    if best_limit:
+        reason += f"（上限 {best_limit} 元）"
+
+    return {
+        "reward_amount": round(reward, 2),
+        "best_rate": best_rate,
+        "reason": reason,
+    }
