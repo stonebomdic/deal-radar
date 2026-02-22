@@ -7,9 +7,12 @@
 - 爬取台灣 10 家主要銀行信用卡資訊
 - 信用卡優惠活動查詢與分類
 - 根據消費習慣智慧推薦最適合的信用卡
+- PChome / Momo 商品價格追蹤與到價通知
+- 即時特賣（Flash Deals）整合
 - RESTful API 提供資料查詢
 - Next.js 前端介面
-- 排程自動更新信用卡資料
+- 排程自動更新信用卡資料與商品價格
+- Telegram / Discord 推播通知
 - Docker 容器化部署
 
 ## 支援銀行
@@ -32,21 +35,21 @@
 ### 環境需求
 
 - Python 3.9+
-- Node.js 18+ (前端)
+- Node.js 20+
 - pip
 
 ### 安裝步驟
 
 ```bash
 # 建立虛擬環境
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # .venv\Scripts\activate  # Windows
 
 # 安裝 Python 依賴
 pip install -e ".[dev]"
 
-# 安裝 Playwright 瀏覽器（爬蟲需要）
+# 安裝 Playwright 瀏覽器（爬蟲與 Momo 追蹤器需要）
 playwright install chromium
 
 # 安裝前端依賴
@@ -57,17 +60,17 @@ cd frontend && npm install && cd ..
 
 ```bash
 # 初始化資料庫
-python -m src.cli init
+python3 -m src.cli init
 
 # 匯入銀行種子資料
-python -m src.cli seed
+python3 -m src.cli seed
 
 # 執行爬蟲（所有銀行或指定銀行）
-python -m src.cli crawl
-python -m src.cli crawl --bank esun
+python3 -m src.cli crawl
+python3 -m src.cli crawl --bank esun
 
 # 啟動後端 API 服務
-python -m src.cli serve
+python3 -m src.cli serve
 
 # 啟動前端開發伺服器（另開終端）
 npm run dev --prefix frontend
@@ -91,7 +94,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
 ## CLI 指令
 
 ```bash
-python -m src.cli <command>
+python3 -m src.cli <command>
 ```
 
 | 指令 | 說明 |
@@ -103,7 +106,7 @@ python -m src.cli <command>
 
 ## API 端點
 
-### 主要端點
+### 信用卡與銀行
 
 | 方法 | 端點 | 說明 |
 |------|------|------|
@@ -114,6 +117,16 @@ python -m src.cli <command>
 | GET | `/api/cards/{card_id}` | 取得單一信用卡詳情 |
 | GET | `/api/cards/{card_id}/promotions` | 取得信用卡優惠活動 |
 | POST | `/api/recommend` | 取得信用卡推薦 |
+
+### 商品追蹤
+
+| 方法 | 端點 | 說明 |
+|------|------|------|
+| GET | `/api/products` | 取得追蹤中的商品列表 |
+| POST | `/api/products` | 新增追蹤商品（`url` 或 `keyword`） |
+| DELETE | `/api/products/{id}` | 停止追蹤商品 |
+| GET | `/api/products/{id}/history` | 取得商品價格歷史 |
+| GET | `/api/flash-deals` | 取得即時特賣（`?platform=` 可篩選） |
 
 ### 查詢參數
 
@@ -164,35 +177,32 @@ curl -X POST http://localhost:8000/api/recommend \
 ## 專案結構
 
 ```
-credit-card-crawler/
+deal-radar/
 ├── src/
 │   ├── api/                 # FastAPI 路由與 schemas
 │   ├── crawlers/            # 爬蟲模組
-│   │   ├── banks/           # 各銀行爬蟲實作
-│   │   │   ├── ctbc.py      # 中國信託
-│   │   │   ├── esun.py      # 玉山銀行
-│   │   │   ├── taishin.py   # 台新銀行
-│   │   │   ├── cathay.py    # 國泰世華
-│   │   │   ├── fubon.py     # 富邦銀行
-│   │   │   ├── sinopac.py   # 永豐銀行
-│   │   │   ├── firstbank.py # 第一銀行
-│   │   │   ├── hncb.py      # 華南銀行
-│   │   │   ├── megabank.py  # 兆豐銀行
-│   │   │   └── ubot.py      # 聯邦銀行
+│   │   ├── banks/           # 各銀行爬蟲實作（10 家）
 │   │   ├── base.py          # 爬蟲基類
 │   │   └── utils.py         # 共用工具（文字清理、優惠擷取）
+│   ├── trackers/            # 電商價格追蹤模組
+│   │   ├── platforms/       # PChome / Momo 追蹤器
+│   │   ├── base.py          # 追蹤器基類
+│   │   └── utils.py         # 價格快照、特賣刷新工具
 │   ├── db/                  # 資料庫模組
 │   ├── models/              # ORM 模型
+│   ├── notifications/       # Telegram / Discord 推播
 │   ├── recommender/         # 推薦引擎
 │   │   ├── engine.py        # 推薦邏輯
 │   │   └── scoring.py       # 評分函式
 │   ├── scheduler/           # 排程系統
+│   │   ├── jobs.py          # 排程任務實作
+│   │   └── runner.py        # APScheduler 設定
 │   ├── cli.py               # CLI 入口
 │   ├── config.py            # 設定檔
 │   └── main.py              # FastAPI 應用程式入口
 ├── frontend/                # Next.js 前端
 │   ├── src/
-│   │   ├── app/             # App Router 頁面
+│   │   ├── app/             # App Router 頁面（/, /cards, /recommend, /track, /deals）
 │   │   └── components/      # React 元件
 │   └── package.json
 ├── tests/                   # 測試檔案
@@ -207,19 +217,15 @@ credit-card-crawler/
 ### 執行測試
 
 ```bash
-pytest tests/ -v
+python3 -m pytest tests/ -v
 ```
 
 ### 程式碼檢查
 
 ```bash
-ruff check src/ tests/
-```
-
-### 格式化程式碼
-
-```bash
-ruff format src/ tests/
+python3 -m ruff check src/ tests/
+python3 -m ruff check --fix src/ tests/
+python3 -m ruff format src/ tests/
 ```
 
 ## 環境變數
@@ -229,9 +235,14 @@ ruff format src/ tests/
 | 變數 | 說明 | 預設值 |
 |------|------|--------|
 | `DATABASE_URL` | 資料庫連線字串 | `sqlite+aiosqlite:///./data/credit_cards.db` |
+| `ENVIRONMENT` | 執行環境 | `development` |
 | `API_HOST` | API 監聽位址 | `0.0.0.0` |
 | `API_PORT` | API 監聽埠號 | `8000` |
-| `DEBUG` | 除錯模式 | `false` |
+| `CORS_ORIGINS` | 允許的 CORS 來源（逗號分隔） | 空（僅 localhost） |
+| `ADMIN_API_KEY` | 管理端點金鑰 | — |
+| `NOTIFICATION_ENABLED` | 是否啟用推播通知 | `false` |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | — |
+| `DISCORD_WEBHOOK_URL` | Discord Webhook URL | — |
 
 ## License
 
