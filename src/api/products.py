@@ -39,6 +39,7 @@ class PriceHistoryResponse(BaseModel):
     original_price: Optional[int]
     in_stock: bool
     snapshot_at: str
+    source: Optional[str] = None
 
 
 @router.get("/products")
@@ -139,6 +140,7 @@ async def get_price_history(product_id: int, db: AsyncSession = Depends(get_db))
             original_price=h.original_price,
             in_stock=h.in_stock,
             snapshot_at=h.snapshot_at.isoformat(),
+            source=h.source,
         )
         for h in history
     ]

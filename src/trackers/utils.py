@@ -55,6 +55,7 @@ def check_price_and_snapshot(
         price=snapshot.price,
         original_price=snapshot.original_price,
         in_stock=snapshot.in_stock,
+        source="price_check",
     )
     session.add(new_record)
     session.commit()

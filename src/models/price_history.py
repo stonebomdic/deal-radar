@@ -23,7 +23,7 @@ class PriceHistory(Base):
     snapshot_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
-    source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(20))
 
     product: Mapped["TrackedProduct"] = relationship(back_populates="price_history")
 
