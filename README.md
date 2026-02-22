@@ -1,6 +1,6 @@
-# Credit Card Crawler
+# Deal Radar
 
-台灣信用卡資訊爬蟲與推薦系統
+台灣信用卡優惠 + 購物商場好康追蹤系統
 
 ## 功能
 

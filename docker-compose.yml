@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: credit-card-crawler
+    container_name: deal-radar
     ports:
       - "8000:8000"
     volumes:

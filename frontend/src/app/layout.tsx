@@ -42,6 +42,18 @@ function Navbar() {
             >
               信用卡
             </Link>
+            <Link
+              href="/track"
+              className="px-4 py-2 text-[#475569] hover:text-[#0F766E] hover:bg-[#F0FDFA] rounded-lg transition-all duration-200 text-sm font-medium"
+            >
+              商品追蹤
+            </Link>
+            <Link
+              href="/deals"
+              className="px-4 py-2 text-[#475569] hover:text-[#0F766E] hover:bg-[#F0FDFA] rounded-lg transition-all duration-200 text-sm font-medium"
+            >
+              限時瘋搶
+            </Link>
             <div className="w-px h-5 bg-[#E2E8F0] mx-1.5" />
             <Link
               href="/recommend"

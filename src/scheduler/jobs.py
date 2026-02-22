@@ -161,6 +161,71 @@ def check_expiring_promotions():
         logger.info(f"Expiring promotion notification results: {results}")
 
 
+def run_price_tracking():
+    """每 30 分鐘：爬取所有 active 商品最新價格並觸發通知"""
+    from src.models.notification_log import NotificationType
+    from src.models.tracked_product import TrackedProduct
+    from src.notifications.formatter import format_price_drop_alert
+    from src.trackers.utils import check_price_and_snapshot
+
+    logger.info("Starting price tracking job")
+    with get_sync_session() as session:
+        products = session.query(TrackedProduct).filter_by(is_active=True).all()
+        logger.info(f"Tracking {len(products)} active products")
+
+        for product in products:
+            try:
+                snapshot, is_drop, is_target = check_price_and_snapshot(session, product)
+                if snapshot and (is_drop or is_target):
+                    notification_type = (
+                        NotificationType.target_price_reached
+                        if is_target
+                        else NotificationType.price_drop
+                    )
+                    top_cards = _get_top_cards_for_shopping(
+                        session, product.platform, snapshot.price
+                    )
+                    message = format_price_drop_alert(product, snapshot, top_cards, is_target)
+                    dispatcher = NotificationDispatcher(session)
+                    dispatcher.dispatch(notification_type, [snapshot.id], message)
+            except Exception as e:
+                logger.error(f"Error tracking product {product.id}: {e}")
+
+    logger.info("Price tracking job completed")
+
+
+def run_flash_deals_refresh():
+    """每 1 小時：更新限時瘋搶列表"""
+    from src.trackers.utils import refresh_flash_deals
+
+    logger.info("Starting flash deals refresh")
+    with get_sync_session() as session:
+        for platform in ["pchome", "momo"]:
+            try:
+                count = refresh_flash_deals(session, platform)
+                logger.info(f"Flash deals refreshed for {platform}: +{count} new")
+            except Exception as e:
+                logger.error(f"Error refreshing flash deals for {platform}: {e}")
+    logger.info("Flash deals refresh completed")
+
+
+def _get_top_cards_for_shopping(session: Session, platform: str, amount: int, top_n: int = 3):
+    """取得指定購物平台與金額的 Top N 信用卡（含回饋試算）"""
+    from src.models.card import CreditCard
+    from src.models.promotion import Promotion
+    from src.recommender.scoring import calculate_shopping_reward
+
+    cards = session.query(CreditCard).all()
+    ranked = []
+    for card in cards:
+        promotions = session.query(Promotion).filter_by(card_id=card.id).all()
+        result = calculate_shopping_reward(card, platform, amount, promotions)
+        ranked.append({"card": card, **result})
+
+    ranked.sort(key=lambda x: x["reward_amount"], reverse=True)
+    return ranked[:top_n]
+
+
 def _notify_new_cards(session: Session, card_ids: List[int]):
     """發送新信用卡通知（由 run_weekly_card_crawl 呼叫）"""
     cards = (

@@ -13,6 +13,9 @@ class NotificationType(enum.Enum):
     new_promotion = "new_promotion"
     expiring_promotion = "expiring_promotion"
     new_card = "new_card"
+    price_drop = "price_drop"
+    target_price_reached = "target_price_reached"
+    flash_deal_new = "flash_deal_new"
 
 
 class NotificationChannel(enum.Enum):

@@ -7,6 +7,8 @@ from src.scheduler.jobs import (
     check_new_promotions,
     cleanup_expired_promotions,
     run_daily_promotion_crawl,
+    run_flash_deals_refresh,
+    run_price_tracking,
     run_weekly_card_crawl,
 )
 
@@ -52,6 +54,24 @@ def create_scheduler() -> BackgroundScheduler:
         CronTrigger(hour=9, minute=0),
         id="check_expiring_promotions",
         name="Check Expiring Promotions",
+    )
+
+    # 每 30 分鐘追蹤商品價格
+    scheduler.add_job(
+        run_price_tracking,
+        "interval",
+        minutes=30,
+        id="price_tracking",
+        name="Price Tracking",
+    )
+
+    # 每 1 小時更新限時瘋搶
+    scheduler.add_job(
+        run_flash_deals_refresh,
+        "interval",
+        hours=1,
+        id="flash_deals_refresh",
+        name="Flash Deals Refresh",
     )
 
     logger.info("Scheduler configured with jobs")
