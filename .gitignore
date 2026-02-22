@@ -38,3 +38,6 @@ htmlcov/
 
 # Playwright
 .playwright/
+
+# Git worktrees
+.worktrees/
