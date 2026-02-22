@@ -9,10 +9,7 @@ from src.trackers.base import BaseTracker, FlashDealResult, PriceSnapshot, Produ
 
 SEARCH_URL = "https://ecshweb.pchome.com.tw/search/v3.3/"
 PRODUCT_URL = "https://ecapi.pchome.com.tw/ecshop/prodapi/v2/prod/{product_id}"
-FLASH_DEALS_URL = (
-    "https://ecapi.pchome.com.tw/ecshop/prodapi/v2/store/DSAA31/prod"
-    "?fields=Id,Name,Price,Pic&limit=50"
-)
+FLASH_DEALS_URL = "https://ecapi-cdn.pchome.com.tw/fsapi/cms/onsale"
 BASE_PRODUCT_URL = "https://24h.pchome.com.tw/prod/{product_id}"
 
 
@@ -83,27 +80,34 @@ class PChomeTracker(BaseTracker):
         try:
             resp = self.client.get(FLASH_DEALS_URL)
             resp.raise_for_status()
-            items = resp.json()
+            data = resp.json()
         except Exception as e:
             logger.error(f"PChome fetch_flash_deals failed: {e}")
             return []
 
+        # 取出目前進行中（status='now'）的時段商品
+        slots = data.get("data", [])
+        items: list = []
+        for slot in slots:
+            if slot.get("status") == "now":
+                items = slot.get("products", [])
+                break
+
         results = []
         for item in items:
-            price_data = item.get("Price", {})
-            sale_price = price_data.get("M", 0)
-            original_price = price_data.get("P")
+            price_data = item.get("price", {})
+            sale_price = price_data.get("onsale", 0)
+            original_price = price_data.get("origin")
             discount_rate = (
                 round(sale_price / original_price, 3)
                 if original_price and original_price > 0
                 else None
             )
-            product_id = item.get("Id", "")
             results.append(
                 FlashDealResult(
                     platform=self.platform,
-                    product_name=item.get("Name", ""),
-                    product_url=BASE_PRODUCT_URL.format(product_id=product_id),
+                    product_name=item.get("name", ""),
+                    product_url=item.get("url", ""),
                     sale_price=sale_price,
                     original_price=original_price,
                     discount_rate=discount_rate,

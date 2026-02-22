@@ -20,13 +20,22 @@ MOCK_PRODUCT_RESPONSE = {
     "Stock": True,
 }
 
-MOCK_FLASH_RESPONSE = [
-    {
-        "Id": "ABCD12-XYZ",
-        "Name": "AirPods Pro 2",
-        "Price": {"M": 6500, "P": 8490},
-    }
-]
+MOCK_FLASH_RESPONSE = {
+    "data": [
+        {
+            "slot": "202602221500",
+            "status": "now",
+            "products": [
+                {
+                    "id": "ABCD12-XYZ",
+                    "name": "AirPods Pro 2",
+                    "url": "https://24h.pchome.com.tw/prod/ABCD12-XYZ",
+                    "price": {"onsale": 6500, "origin": 8490},
+                }
+            ],
+        }
+    ]
+}
 
 
 def test_search_products():
@@ -66,3 +75,4 @@ def test_fetch_flash_deals():
     assert len(deals) == 1
     assert deals[0].platform == "pchome"
     assert deals[0].sale_price == 6500
+    assert deals[0].product_url == "https://24h.pchome.com.tw/prod/ABCD12-XYZ"
