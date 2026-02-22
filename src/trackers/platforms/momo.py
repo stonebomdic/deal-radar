@@ -10,7 +10,7 @@ from playwright_stealth import Stealth
 from src.trackers.base import BaseTracker, FlashDealResult, PriceSnapshot, ProductResult
 
 SEARCH_URL = "https://www.momoshop.com.tw/search/searchShop.jsp?keyword={keyword}"
-FLASH_DEALS_URL = "https://www.momoshop.com.tw/category/LgrpCategory.jsp?l_code=fl"
+MOMO_HOME_URL = "https://www.momoshop.com.tw/"
 
 
 def _parse_price(text: str) -> Optional[int]:
@@ -135,32 +135,54 @@ class MomoTracker(BaseTracker):
         try:
             with sync_playwright() as p:
                 browser, page = self._get_browser_page(p)
-                page.goto(FLASH_DEALS_URL, timeout=30000)
-                page.wait_for_selector(".prdListArea", timeout=15000)
 
-                items = page.query_selector_all(".prdListArea .li_column")
+                # 從首頁動態取得當前限時搶購 EDM 連結
+                page.goto(MOMO_HOME_URL, timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=15000)
+                flash_link = page.query_selector("a:has-text('限時搶購')")
+                if flash_link is None:
+                    logger.warning("Momo: 找不到限時搶購連結")
+                    browser.close()
+                    return []
+                flash_url = flash_link.get_attribute("href") or ""
+                if flash_url.startswith("//"):
+                    flash_url = "https:" + flash_url
+                elif flash_url.startswith("/"):
+                    flash_url = "https://www.momoshop.com.tw" + flash_url
+
+                page.goto(flash_url, timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_selector("li.box1", timeout=15000)
+
+                items = page.query_selector_all("li.box1")
                 for item in items[:30]:
-                    name_el = item.query_selector(".prdName")
-                    sale_el = item.query_selector(".price b")
-                    orig_el = item.query_selector(".originalPrice")
-                    url_el = item.query_selector("a")
+                    brand_el = item.query_selector(".brand")
+                    name_el = item.query_selector(".brand2")
+                    sale_el = item.query_selector(".price span")
+                    orig_el = item.query_selector(".oldPrice span")
+                    url_el = item.query_selector("a[id^='gdsHref']")
 
                     if not name_el or not sale_el or not url_el:
                         continue
 
-                    name = name_el.inner_text().strip()
+                    brand = brand_el.inner_text().strip() if brand_el else ""
+                    product_name = name_el.inner_text().strip()
+                    full_name = f"{brand} {product_name}".strip() if brand else product_name
+
                     sale_price = _parse_price(sale_el.inner_text()) or 0
                     original_price = _parse_price(orig_el.inner_text()) if orig_el else None
                     discount_rate = _calculate_discount_rate(sale_price, original_price or 0)
 
                     url = url_el.get_attribute("href") or ""
-                    if url.startswith("/"):
+                    if url.startswith("//"):
+                        url = "https:" + url
+                    elif url.startswith("/"):
                         url = "https://www.momoshop.com.tw" + url
 
                     results.append(
                         FlashDealResult(
                             platform=self.platform,
-                            product_name=name,
+                            product_name=full_name,
                             product_url=url,
                             sale_price=sale_price,
                             original_price=original_price,
