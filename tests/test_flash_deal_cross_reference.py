@@ -127,3 +127,37 @@ def test_flash_deal_no_notification_when_price_same_or_higher(db):
         refresh_flash_deals(db, "pchome")
 
     mock_dispatcher.dispatch.assert_not_called()
+
+
+def test_flash_deal_triggers_notification_when_target_price_reached(db):
+    """flash deal 價格達到目標價時，應觸發 target_price_reached 通知（即使非最低歷史價）"""
+    from src.models.notification_log import NotificationType
+
+    product = _make_tracked(db)
+    product.target_price = 6000
+    db.flush()
+
+    # 上次記錄比特賣價更低，所以不是 price_drop — 但有達到 target_price
+    prior = PriceHistory(product_id=product.id, price=5500, in_stock=True)
+    db.add(prior)
+    db.commit()
+
+    mock_deal = FlashDealResult(
+        platform="pchome",
+        product_name="Sony 耳機",
+        product_url=product.url,
+        sale_price=5800,  # <= target_price(6000), but > last(5500) → not a price drop
+        original_price=8490,
+        discount_rate=0.683,
+    )
+    mock_tracker = MagicMock()
+    mock_tracker.fetch_flash_deals.return_value = [mock_deal]
+
+    mock_dispatcher = MagicMock()
+    with patch("src.trackers.utils.get_tracker", return_value=mock_tracker), \
+         patch("src.trackers.utils.NotificationDispatcher", return_value=mock_dispatcher):
+        refresh_flash_deals(db, "pchome")
+
+    assert mock_dispatcher.dispatch.called
+    call_args = mock_dispatcher.dispatch.call_args[0]
+    assert call_args[0] == NotificationType.target_price_reached
