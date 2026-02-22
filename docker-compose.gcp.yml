@@ -1,0 +1,18 @@
+# GCP e2-micro 部署 override
+# 使用方式：docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.gcp.yml up -d
+services:
+  app:
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 前端由 Nginx 靜態服務，不需要 Node.js 容器
+  frontend:
+    profiles:
+      - disabled
