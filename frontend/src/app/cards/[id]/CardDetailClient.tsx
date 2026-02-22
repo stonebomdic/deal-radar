@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import { fetchCard, fetchCardPromotions } from "@/lib/api";
 import type { CreditCardDetail, Promotion } from "@/lib/types";
 
-export default function CardDetailPage() {
-  const params = useParams();
-  const cardId = Number(params.id);
+export default function CardDetailClient({ id }: { id: string }) {
+  const cardId = Number(id);
 
   const [card, setCard] = useState<CreditCardDetail | null>(null);
   const [promotions, setPromotions] = useState<Promotion[]>([]);

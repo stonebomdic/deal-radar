@@ -25,6 +25,6 @@ export async function generateStaticParams() {
   }
 }
 
-export default function CardDetailPage() {
-  return <CardDetailClient />;
+export default function CardDetailPage({ params }: { params: { id: string } }) {
+  return <CardDetailClient id={params.id} />;
 }
