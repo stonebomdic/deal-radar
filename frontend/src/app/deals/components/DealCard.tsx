@@ -47,8 +47,11 @@ export default function DealCard({ deal }: { deal: Deal }) {
 
         {deal.best_card && (
           <div className="bg-green-50 rounded-lg px-3 py-2 mb-3">
-            <p className="text-xs text-green-700">
-              💳 {deal.best_card.name}：回饋 {deal.best_card.best_rate}%
+            <p className="text-xs text-green-700 flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
+              </svg>
+              {deal.best_card.name}：回饋 {deal.best_card.best_rate}%
               = 省 <strong>${deal.best_card.reward_amount.toFixed(0)}</strong>
             </p>
           </div>
@@ -65,7 +68,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
           </a>
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="text-xs text-gray-400 hover:text-gray-600"
+            className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
           >
             {showDetails ? "收起" : "查看更多"}
           </button>

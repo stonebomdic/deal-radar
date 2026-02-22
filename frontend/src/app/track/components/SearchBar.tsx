@@ -74,9 +74,14 @@ export default function SearchBar({ onResults, onProductAdded }: Props) {
         </button>
       </form>
       {momoHint && (
-        <p className="mt-2 text-sm text-blue-600">
-          已在新視窗開啟 Momo 搜尋，找到商品後請複製連結貼回此處追蹤
-        </p>
+        <div className="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+          </svg>
+          <p className="text-sm text-blue-700">
+            已在新視窗開啟 Momo 搜尋，找到商品後請<strong>複製商品連結</strong>貼回此處追蹤
+          </p>
+        </div>
       )}
     </div>
   );
